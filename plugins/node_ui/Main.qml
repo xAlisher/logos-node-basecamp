@@ -84,9 +84,14 @@ Rectangle {
             var msgs = ch.messages || []
             for (var j = 0; j < msgs.length; j++) {
                 var m = msgs[j]
-                zoneMessageModel.append({ channel: ch.channel || "?", msgText: m.text || "",
-                                          timestamp: m.timestamp || "",
-                                          blockId: (m.block_id || "").substring(0, 12) })
+                zoneMessageModel.append({
+                    channel:   ch.channel || "?",
+                    msgText:   m.text || "",
+                    timestamp: m.timestamp || "",
+                    blockId:   (m.block_id || "").substring(0, 12),
+                    finalized: m.finalized === true,
+                    slot:      m.slot || 0
+                })
             }
         }
         if (zoneMessageModel.count > 0) zoneListView.positionViewAtEnd()
@@ -503,6 +508,8 @@ Rectangle {
                             required property string msgText
                             required property string timestamp
                             required property string blockId
+                            required property bool   finalized
+                            required property int    slot
                             width: zoneListView.width
                             height: msgCol.implicitHeight + 8
                             color: "transparent"
@@ -516,7 +523,16 @@ Rectangle {
                                     Rectangle { width: chLbl.width + 8; height: 14; radius: 7; color: root.borderColor
                                         Text { id: chLbl; anchors.centerIn: parent; text: channel; color: root.textSecondary; font.pixelSize: 9 } }
                                     Text { text: timestamp; color: root.textDisabled; font.pixelSize: 9 }
-                                    Text { visible: blockId.length > 0; text: blockId + "…"; color: root.textDisabled; font.pixelSize: 9; font.family: "monospace" }
+                                    Text {
+                                        visible: slot > 0
+                                        text: "slot " + slot
+                                        color: root.textDisabled; font.pixelSize: 9; font.family: "monospace"
+                                    }
+                                    Text {
+                                        text: finalized ? "✓" : "⏳"
+                                        color: finalized ? root.successGreen : root.warnAmber
+                                        font.pixelSize: 9
+                                    }
                                 }
                                 Text { Layout.fillWidth: true; text: msgText; color: root.textPrimary; font.pixelSize: 12; wrapMode: Text.WrapAnywhere }
                                 Rectangle { Layout.fillWidth: true; height: 1; color: root.borderColor; opacity: 0.4 }

@@ -490,91 +490,49 @@ QString NodePlugin::getZoneMessages() const
     if (dirPath.isEmpty())
         return errorJson(QStringLiteral("zone board dir not configured"));
 
-    QJsonArray channels;
-    QStringList seenTopics;
+    // Read dashboard-live-channels.json — written by zone-board in real-time.
+    // This is authoritative: all subscribed channels, live messages, finality status.
+    // The old cache/*.json files are stale snapshots; ignore them.
+    QFile f(dirPath + QStringLiteral("/dashboard-live-channels.json"));
+    if (!f.open(QIODevice::ReadOnly))
+        return errorJson(QStringLiteral("dashboard-live-channels.json not found — is zone-board running?"));
 
-    QDir cacheDir(dirPath + QStringLiteral("/cache"));
-    if (cacheDir.exists()) {
-        const QStringList files = cacheDir.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
-        for (const QString& fname : files) {
-            QString topic = fname;
-            topic.chop(5); // remove .json
-            seenTopics.append(topic);
+    QJsonParseError pe;
+    QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &pe);
+    f.close();
 
-            QJsonArray messages;
-            QFile f(cacheDir.filePath(fname));
-            if (f.open(QIODevice::ReadOnly)) {
-                QJsonParseError pe;
-                QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &pe);
-                if (pe.error == QJsonParseError::NoError && doc.isArray())
-                    messages = doc.array();
-                f.close();
-            }
+    if (pe.error != QJsonParseError::NoError || !doc.isObject())
+        return errorJson(QStringLiteral("invalid dashboard-live-channels.json"));
 
-            QJsonObject ch;
-            ch[QStringLiteral("channel")]  = decodeZoneTopic(topic);
-            ch[QStringLiteral("topic")]    = topic;
-            ch[QStringLiteral("messages")] = messages;
-            channels.append(ch);
-        }
-    }
-
-    // Also add subscribed channels not yet in cache
-    QFile subFile(dirPath + QStringLiteral("/subscriptions.json"));
-    if (subFile.open(QIODevice::ReadOnly)) {
-        QJsonParseError pe;
-        QJsonDocument doc = QJsonDocument::fromJson(subFile.readAll(), &pe);
-        subFile.close();
-        if (pe.error == QJsonParseError::NoError && doc.isArray()) {
-            for (const QJsonValue& v : doc.array()) {
-                QString topic = v.toString();
-                if (!topic.isEmpty() && !seenTopics.contains(topic)) {
-                    seenTopics.append(topic);
-                    QJsonObject ch;
-                    ch[QStringLiteral("channel")]  = decodeZoneTopic(topic);
-                    ch[QStringLiteral("topic")]    = topic;
-                    ch[QStringLiteral("messages")] = QJsonArray();
-                    channels.append(ch);
-                }
-            }
-        }
-    }
-
-    // Inject own channel from channel.id (zone-board doesn't list it in subscriptions)
+    // Determine own channel name from channel.id
+    QString ownChannel;
     QFile channelIdFile(dirPath + QStringLiteral("/channel.id"));
     if (channelIdFile.open(QIODevice::ReadOnly)) {
         QString raw = QString::fromUtf8(channelIdFile.readAll()).trimmed();
         channelIdFile.close();
-        // channel.id contains "logos:yolo:name\0\0..." — strip prefix and nulls
         static const QString kPrefix = QStringLiteral("logos:yolo:");
         if (raw.startsWith(kPrefix)) raw = raw.mid(kPrefix.size());
         raw.remove(QChar('\0'));
-        raw = raw.trimmed();
-        // Convert back to hex topic to check if already in list
-        QByteArray topicBytes = (QStringLiteral("logos:yolo:") + raw).toUtf8();
-        topicBytes = topicBytes.left(32).leftJustified(32, '\0');
-        QString topicHex = QString::fromLatin1(topicBytes.toHex());
-        if (!raw.isEmpty() && !seenTopics.contains(topicHex)) {
-            // Check if there's a cache file for it
-            QJsonArray myMessages;
-            QFile myCacheFile(cacheDir.filePath(topicHex + QStringLiteral(".json")));
-            if (myCacheFile.open(QIODevice::ReadOnly)) {
-                QJsonParseError pe;
-                QJsonDocument doc = QJsonDocument::fromJson(myCacheFile.readAll(), &pe);
-                if (pe.error == QJsonParseError::NoError && doc.isArray())
-                    myMessages = doc.array();
-                myCacheFile.close();
-            }
-            QJsonObject ch;
-            ch[QStringLiteral("channel")]  = raw + QStringLiteral(" (you)");
-            ch[QStringLiteral("topic")]    = topicHex;
-            ch[QStringLiteral("messages")] = myMessages;
-            // Insert at front so own channel appears first
-            QJsonArray reordered;
-            reordered.append(ch);
-            for (const QJsonValue& v : channels) reordered.append(v);
-            channels = reordered;
-        }
+        ownChannel = raw.trimmed();
+    }
+
+    QJsonObject root = doc.object();
+    QJsonObject channelsObj = root[QStringLiteral("channels")].toObject();
+
+    // Build array: own channel first, rest sorted by name
+    QStringList names = channelsObj.keys();
+    names.sort(Qt::CaseInsensitive);
+    if (!ownChannel.isEmpty() && names.removeOne(ownChannel))
+        names.prepend(ownChannel);
+
+    QJsonArray channels;
+    for (const QString& name : names) {
+        QJsonObject ch;
+        bool isOwn = (!ownChannel.isEmpty() && name == ownChannel);
+        ch[QStringLiteral("channel")]  = isOwn ? name + QStringLiteral(" (you)") : name;
+        ch[QStringLiteral("topic")]    = name;  // use name as topic key for filtering
+        ch[QStringLiteral("messages")] = channelsObj[name].toArray();
+        channels.append(ch);
     }
 
     QJsonObject result;
