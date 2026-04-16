@@ -3,7 +3,7 @@
   "category": "blockchain",
   "dependencies": ["logos_node"],
   "description": "Logos blockchain node manager — UI",
-  "icon": "icons/Node_sidebar.png",
+  "icon": "icons/node.png",
   "main": {},
   "manifestVersion": "0.2.0",
   "name": "node_ui",

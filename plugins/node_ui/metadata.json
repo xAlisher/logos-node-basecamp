@@ -9,5 +9,5 @@
   "dependencies": ["logos_node"],
   "category": "blockchain",
   "capabilities": [],
-  "icon": "icons/Node_sidebar.png"
+  "icon": "icons/node.png"
 }

@@ -121,7 +121,7 @@ install(FILES
     DESTINATION "${NODE_UI_DIR}"
 )
 install(FILES
-    assets/icons/Node_sidebar.png
+    assets/icons/node.png
     DESTINATION "${NODE_UI_DIR}/icons"
 )
 

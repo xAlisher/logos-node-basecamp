@@ -44,6 +44,27 @@ public:
     // For beacon and other modules — returns configured node URL
     Q_INVOKABLE QString getNodeUrl() const;
 
+    // Zone / wallet config (separate from node binary config)
+    Q_INVOKABLE QString setZoneConfig(const QString& walletPubKey,
+                                       const QString& zoneBoardBinaryPath,
+                                       const QString& zoneBoardDir);
+    Q_INVOKABLE QString getZoneConfig() const;
+
+    // Zone-board process lifecycle
+    Q_INVOKABLE QString startZoneBoard();
+    Q_INVOKABLE QString stopZoneBoard();
+
+    // LGO balance from GET /wallet/{pubkey}/balance
+    Q_INVOKABLE QString getBalance();
+
+    // Zone messages from zone-board cache directory
+    Q_INVOKABLE QString getZoneMessages() const;
+    Q_INVOKABLE QString publishZoneMessage(const QString& message);
+    Q_INVOKABLE QString subscribeZoneChannel(const QString& channel);
+
+    // Last 80 lines from the node's on-disk log files (ANSI stripped)
+    Q_INVOKABLE QString getNodeLogs() const;
+
 signals:
     void eventResponse(const QString& eventName, const QVariantList& data);
 
@@ -61,10 +82,12 @@ private:
         QString level;
     };
 
-    QProcess*              m_process    = nullptr;
-    QNetworkAccessManager* m_nam        = nullptr;
-    bool                   m_startedByUs = false;
+    QProcess*              m_process             = nullptr;
+    QProcess*              m_zoneBoardProcess    = nullptr;
+    QNetworkAccessManager* m_nam                 = nullptr;
+    bool                   m_startedByUs         = false;
+    bool                   m_zoneBoardStartedByUs = false;
     QList<LogEntry>        m_logBuffer;    // capped at 200
-    static constexpr int   kMaxLogLines = 200;
+    static constexpr int   kMaxLogLines   = 200;
     static constexpr int   kHttpTimeoutMs = 2000;
 };

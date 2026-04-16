@@ -155,9 +155,9 @@ Rectangle {
         }
         var zcfg = root.callModuleParse(logos.callModule("logos_node", "getZoneConfig", []))
         if (zcfg) {
-            walletField.text      = zcfg.walletPubKey     || ""
-            zoneDirField.text     = zcfg.zoneBoardDir     || ""
-            zoneSessionField.text = zcfg.zoneBoardSession || "zone-board"
+            walletField.text      = zcfg.walletPubKey        || ""
+            zoneBinaryField.text  = zcfg.zoneBoardBinaryPath || ""
+            zoneDirField.text     = zcfg.zoneBoardDir        || ""
         }
         root.refreshZone()
     }
@@ -355,16 +355,17 @@ Rectangle {
                                 verticalAlignment: TextInput.AlignVCenter; color: root.textPrimary; font.pixelSize: 11; font.family: "monospace"; clip: true
                                 Text { anchors.fill: parent; verticalAlignment: Text.AlignVCenter; text: parent.text.length === 0 ? "hex public key for balance" : ""; color: root.textDisabled; font.pixelSize: 11; font.family: "monospace" } } }
 
+                        Text { text: "Zone Board Binary"; color: root.textSecondary; font.pixelSize: 10 }
+                        Rectangle { Layout.fillWidth: true; height: 26; color: "#0A0A0A"; border.color: root.borderColor; radius: 3
+                            TextInput { id: zoneBinaryField; anchors { fill: parent; leftMargin: 6; rightMargin: 6 }
+                                verticalAlignment: TextInput.AlignVCenter; color: root.textPrimary; font.pixelSize: 11; font.family: "monospace"; clip: true
+                                Text { anchors.fill: parent; verticalAlignment: Text.AlignVCenter; text: parent.text.length === 0 ? "/path/to/zone-board" : ""; color: root.textDisabled; font.pixelSize: 11; font.family: "monospace" } } }
+
                         Text { text: "Zone Board Dir"; color: root.textSecondary; font.pixelSize: 10 }
                         Rectangle { Layout.fillWidth: true; height: 26; color: "#0A0A0A"; border.color: root.borderColor; radius: 3
                             TextInput { id: zoneDirField; anchors { fill: parent; leftMargin: 6; rightMargin: 6 }
                                 verticalAlignment: TextInput.AlignVCenter; color: root.textPrimary; font.pixelSize: 11; font.family: "monospace"; clip: true
                                 Text { anchors.fill: parent; verticalAlignment: Text.AlignVCenter; text: parent.text.length === 0 ? "/path/to/zone-board-vX" : ""; color: root.textDisabled; font.pixelSize: 11; font.family: "monospace" } } }
-
-                        Text { text: "Zone Board Tmux Session"; color: root.textSecondary; font.pixelSize: 10 }
-                        Rectangle { Layout.fillWidth: true; height: 26; color: "#0A0A0A"; border.color: root.borderColor; radius: 3
-                            TextInput { id: zoneSessionField; text: "zone-board"; anchors { fill: parent; leftMargin: 6; rightMargin: 6 }
-                                verticalAlignment: TextInput.AlignVCenter; color: root.textPrimary; font.pixelSize: 11; font.family: "monospace"; clip: true } }
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -376,7 +377,7 @@ Rectangle {
                                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         logos.callModule("logos_node", "setNodeConfig", [binaryField.text, circuitsField.text, configField.text, dataDirField.text])
-                                        logos.callModule("logos_node", "setZoneConfig", [walletField.text, zoneDirField.text, zoneSessionField.text])
+                                        logos.callModule("logos_node", "setZoneConfig", [walletField.text, zoneBinaryField.text, zoneDirField.text])
                                         root.refreshZone(); root.settingsOpen = false
                                     }
                                 }

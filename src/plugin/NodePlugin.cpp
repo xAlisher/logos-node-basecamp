@@ -21,9 +21,9 @@ static constexpr const char* kCircuitsPathKey      = "logos-node/circuitsPath";
 static constexpr const char* kConfigPathKey        = "logos-node/configPath";
 static constexpr const char* kDataDirKey           = "logos-node/dataDir";
 static constexpr const char* kHttpPortKey          = "logos-node/httpPort";
-static constexpr const char* kWalletPubKeyKey      = "logos-node/walletPubKey";
-static constexpr const char* kZoneBoardDirKey      = "logos-node/zoneBoardDir";
-static constexpr const char* kZoneBoardSessionKey  = "logos-node/zoneBoardSession";
+static constexpr const char* kWalletPubKeyKey          = "logos-node/walletPubKey";
+static constexpr const char* kZoneBoardBinaryKey       = "logos-node/zoneBoardBinaryPath";
+static constexpr const char* kZoneBoardDirKey          = "logos-node/zoneBoardDir";
 
 // ── Zone topic decoder ────────────────────────────────────────────────────────
 static QString decodeZoneTopic(const QString& hex)
@@ -111,12 +111,16 @@ NodePlugin::NodePlugin(QObject* parent)
 
 NodePlugin::~NodePlugin()
 {
-    if (m_process && m_startedByUs && m_process->state() != QProcess::NotRunning) {
-        m_process->terminate();
-        m_process->waitForFinished(5000);
-        if (m_process->state() != QProcess::NotRunning)
-            m_process->kill();
-    }
+    auto kill = [](QProcess* p) {
+        if (p && p->state() != QProcess::NotRunning) {
+            p->terminate();
+            p->waitForFinished(5000);
+            if (p->state() != QProcess::NotRunning)
+                p->kill();
+        }
+    };
+    if (m_zoneBoardStartedByUs) kill(m_zoneBoardProcess);
+    if (m_startedByUs)          kill(m_process);
 }
 
 void NodePlugin::initLogos(LogosAPI* api)
@@ -254,6 +258,7 @@ QString NodePlugin::startNode()
 
     m_startedByUs = true;
     appendLog(QStringLiteral("node started (pid %1)").arg(m_process->processId()));
+    startZoneBoard();
     return okJson();
 }
 
@@ -264,6 +269,8 @@ QString NodePlugin::stopNode()
 
     if (!m_process || m_process->state() == QProcess::NotRunning)
         return errorJson(QStringLiteral("node is not running"));
+
+    stopZoneBoard();
 
     m_process->terminate();
     if (!m_process->waitForFinished(5000)) {
@@ -341,14 +348,13 @@ QString NodePlugin::getLog() const
 
 // ── Zone / wallet config ──────────────────────────────────────────────────────
 QString NodePlugin::setZoneConfig(const QString& walletPubKey,
-                                   const QString& zoneBoardDir,
-                                   const QString& zoneBoardSession)
+                                   const QString& zoneBoardBinaryPath,
+                                   const QString& zoneBoardDir)
 {
     QSettings s;
-    s.setValue(QLatin1String(kWalletPubKeyKey),     walletPubKey);
-    s.setValue(QLatin1String(kZoneBoardDirKey),      zoneBoardDir);
-    s.setValue(QLatin1String(kZoneBoardSessionKey),
-               zoneBoardSession.isEmpty() ? QStringLiteral("zone-board") : zoneBoardSession);
+    s.setValue(QLatin1String(kWalletPubKeyKey),    walletPubKey);
+    s.setValue(QLatin1String(kZoneBoardBinaryKey), zoneBoardBinaryPath);
+    s.setValue(QLatin1String(kZoneBoardDirKey),    zoneBoardDir);
     s.sync();
     appendLog(QStringLiteral("zone config saved"));
     return okJson();
@@ -358,11 +364,81 @@ QString NodePlugin::getZoneConfig() const
 {
     QSettings s;
     QJsonObject o;
-    o[QStringLiteral("walletPubKey")]     = s.value(QLatin1String(kWalletPubKeyKey)).toString();
-    o[QStringLiteral("zoneBoardDir")]     = s.value(QLatin1String(kZoneBoardDirKey)).toString();
-    o[QStringLiteral("zoneBoardSession")] = s.value(QLatin1String(kZoneBoardSessionKey),
-                                                     QStringLiteral("zone-board")).toString();
+    o[QStringLiteral("walletPubKey")]         = s.value(QLatin1String(kWalletPubKeyKey)).toString();
+    o[QStringLiteral("zoneBoardBinaryPath")]  = s.value(QLatin1String(kZoneBoardBinaryKey)).toString();
+    o[QStringLiteral("zoneBoardDir")]         = s.value(QLatin1String(kZoneBoardDirKey)).toString();
     return QJsonDocument(o).toJson(QJsonDocument::Compact);
+}
+
+// ── Zone-board process ────────────────────────────────────────────────────────
+QString NodePlugin::startZoneBoard()
+{
+    if (m_zoneBoardStartedByUs && m_zoneBoardProcess
+            && m_zoneBoardProcess->state() == QProcess::Running)
+        return okJson();  // already running
+
+    QSettings s;
+    QString binary  = s.value(QLatin1String(kZoneBoardBinaryKey)).toString();
+    QString dataDir = s.value(QLatin1String(kZoneBoardDirKey)).toString();
+
+    if (binary.isEmpty() || dataDir.isEmpty()) {
+        appendLog(QStringLiteral("zone-board: not configured, skipping"), QStringLiteral("warn"));
+        return errorJson(QStringLiteral("zone-board binary or data dir not configured"));
+    }
+
+    if (m_zoneBoardProcess) {
+        m_zoneBoardProcess->deleteLater();
+        m_zoneBoardProcess = nullptr;
+    }
+
+    m_zoneBoardProcess = new QProcess(this);
+    m_zoneBoardProcess->setProcessChannelMode(QProcess::MergedChannels);
+
+    connect(m_zoneBoardProcess, &QProcess::readyReadStandardOutput, this, [this]() {
+        const QString out = QString::fromUtf8(m_zoneBoardProcess->readAllStandardOutput());
+        for (const QString& line : out.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+            QString level = line.contains(QLatin1String("ERROR"), Qt::CaseInsensitive)
+                          ? QStringLiteral("error")
+                          : line.contains(QLatin1String("WARN"), Qt::CaseInsensitive)
+                          ? QStringLiteral("warn")
+                          : QStringLiteral("info");
+            appendLog(QStringLiteral("[zb] ") + line, level);
+        }
+    });
+
+    connect(m_zoneBoardProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this](int code, QProcess::ExitStatus) {
+        appendLog(QStringLiteral("zone-board exited: code %1").arg(code),
+                  code == 0 ? QStringLiteral("info") : QStringLiteral("warn"));
+        m_zoneBoardStartedByUs = false;
+    });
+
+    m_zoneBoardProcess->start(binary, {
+        QStringLiteral("--node-url"), getNodeUrl(),
+        QStringLiteral("--data-dir"), dataDir
+    });
+
+    if (!m_zoneBoardProcess->waitForStarted(3000))
+        return errorJson(QStringLiteral("zone-board failed to start: ") + m_zoneBoardProcess->errorString());
+
+    m_zoneBoardStartedByUs = true;
+    appendLog(QStringLiteral("zone-board started (pid %1)").arg(m_zoneBoardProcess->processId()));
+    return okJson();
+}
+
+QString NodePlugin::stopZoneBoard()
+{
+    if (!m_zoneBoardStartedByUs || !m_zoneBoardProcess
+            || m_zoneBoardProcess->state() == QProcess::NotRunning)
+        return okJson();
+
+    m_zoneBoardProcess->terminate();
+    if (!m_zoneBoardProcess->waitForFinished(5000))
+        m_zoneBoardProcess->kill();
+
+    m_zoneBoardStartedByUs = false;
+    appendLog(QStringLiteral("zone-board stopped"));
+    return okJson();
 }
 
 // ── Balance ───────────────────────────────────────────────────────────────────
@@ -510,26 +586,16 @@ QString NodePlugin::getZoneMessages() const
 // ── Zone publish / subscribe ──────────────────────────────────────────────────
 QString NodePlugin::publishZoneMessage(const QString& message)
 {
-    QSettings s;
-    QString session = s.value(QLatin1String(kZoneBoardSessionKey),
-                               QStringLiteral("zone-board")).toString();
     QString text = message.trimmed();
     if (text.isEmpty())
         return errorJson(QStringLiteral("message is empty"));
 
-    // Clear line, type message, submit — same as Python server
-    int r1 = QProcess::execute(QStringLiteral("tmux"),
-                                {QStringLiteral("send-keys"), QStringLiteral("-t"),
-                                 session, QStringLiteral("Enter")});
-    int r2 = QProcess::execute(QStringLiteral("tmux"),
-                                {QStringLiteral("send-keys"), QStringLiteral("-t"),
-                                 session, QStringLiteral("-l"), text});
-    int r3 = QProcess::execute(QStringLiteral("tmux"),
-                                {QStringLiteral("send-keys"), QStringLiteral("-t"),
-                                 session, QStringLiteral("Enter")});
+    if (!m_zoneBoardProcess || m_zoneBoardProcess->state() != QProcess::Running)
+        return errorJson(QStringLiteral("zone-board is not running — click Start first"));
 
-    if (r1 != 0 || r2 != 0 || r3 != 0)
-        return errorJson(QStringLiteral("zone-board session not found: ") + session);
+    // Write message to stdin: newline to clear any partial input, then message + newline
+    m_zoneBoardProcess->write("\n");
+    m_zoneBoardProcess->write((text + "\n").toUtf8());
 
     appendLog(QStringLiteral("zone publish: ") + text.left(60));
     return okJson();
@@ -595,23 +661,14 @@ QString NodePlugin::getNodeLogs() const
 
 QString NodePlugin::subscribeZoneChannel(const QString& channel)
 {
-    QSettings s;
-    QString session = s.value(QLatin1String(kZoneBoardSessionKey),
-                               QStringLiteral("zone-board")).toString();
     QString name = channel.trimmed();
     if (name.isEmpty())
         return errorJson(QStringLiteral("channel name is empty"));
 
-    QString cmd = QStringLiteral("/sub ") + name;
-    int r1 = QProcess::execute(QStringLiteral("tmux"),
-                                {QStringLiteral("send-keys"), QStringLiteral("-t"),
-                                 session, QStringLiteral("-l"), cmd});
-    int r2 = QProcess::execute(QStringLiteral("tmux"),
-                                {QStringLiteral("send-keys"), QStringLiteral("-t"),
-                                 session, QStringLiteral("Enter")});
+    if (!m_zoneBoardProcess || m_zoneBoardProcess->state() != QProcess::Running)
+        return errorJson(QStringLiteral("zone-board is not running — click Start first"));
 
-    if (r1 != 0 || r2 != 0)
-        return errorJson(QStringLiteral("zone-board session not found: ") + session);
+    m_zoneBoardProcess->write(("/sub " + name + "\n").toUtf8());
 
     appendLog(QStringLiteral("zone subscribe: ") + name);
     return okJson();
