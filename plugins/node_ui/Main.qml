@@ -24,7 +24,8 @@ Rectangle {
     property bool   settingsOpen:  false
     property bool   pollBusy:      false
     property int    logSeenCount:  0
-    property bool   nodeRunning:   false
+    property bool   nodeRunning:       false
+    property bool   nodeProcessRunning: false   // process alive but HTTP not yet up
     property bool   startedByUs:   false
     property string nodeMode:      ""
     property int    nodeSlot:      0
@@ -51,14 +52,14 @@ Rectangle {
         } catch(e) { return null }
     }
     function statusColor() {
-        if (!root.nodeRunning)          return root.errorRed
-        if (root.nodeMode === "Online") return root.successGreen
-        return root.warnAmber
+        if (root.nodeRunning) return root.nodeMode === "Online" ? root.successGreen : root.warnAmber
+        if (root.nodeProcessRunning)    return root.warnAmber
+        return root.errorRed
     }
     function statusLabel() {
-        if (!root.nodeRunning) return "Offline"
-        if (root.nodeMode === "Online") return "Online"
-        return root.nodeMode || "Starting…"
+        if (root.nodeRunning) return root.nodeMode === "Online" ? "Online" : (root.nodeMode || "Syncing")
+        if (root.nodeProcessRunning)    return "Starting…"
+        return "Offline"
     }
     function refreshZone() {
         if (typeof logos === "undefined" || !logos.callModule) return
@@ -101,8 +102,9 @@ Rectangle {
             root.pollBusy = true
             var st = root.callModuleParse(logos.callModule("logos_node", "getStatus", []))
             if (st) {
-                root.nodeRunning = st.running === true
-                root.startedByUs = st.startedByUs === true
+                root.nodeRunning        = st.running === true
+                root.nodeProcessRunning = st.processRunning === true
+                root.startedByUs        = st.startedByUs === true
                 root.nodeMode    = st.mode    || ""
                 root.nodeSlot    = st.slot    || 0
                 root.nodeLibSlot = st.libSlot || 0
@@ -182,7 +184,7 @@ Rectangle {
             Rectangle {
                 width: 56; height: 24; radius: 4; color: "transparent"
                 border.color: root.nodeRunning ? root.errorRed : root.successGreen
-                visible: root.nodeRunning ? root.startedByUs : true
+                visible: root.nodeRunning ? root.startedByUs : !root.nodeProcessRunning
                 Text { anchors.centerIn: parent; text: root.nodeRunning ? "Stop" : "Start"
                        color: root.nodeRunning ? root.errorRed : root.successGreen; font.pixelSize: 11 }
                 MouseArea {
