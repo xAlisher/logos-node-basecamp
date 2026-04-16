@@ -519,6 +519,25 @@ QString NodePlugin::getZoneMessages() const
     QJsonObject root = doc.object();
     QJsonObject channelsObj = root[QStringLiteral("channels")].toObject();
 
+    // Merge subscriptions.json: channels subscribed but not yet in the live file
+    // show as empty channel tabs so the user knows they're subscribed.
+    QFile subFile(dirPath + QStringLiteral("/subscriptions.json"));
+    if (subFile.open(QIODevice::ReadOnly)) {
+        QJsonParseError spe;
+        QJsonDocument sdoc = QJsonDocument::fromJson(subFile.readAll(), &spe);
+        subFile.close();
+        if (spe.error == QJsonParseError::NoError && sdoc.isArray()) {
+            for (const QJsonValue& v : sdoc.array()) {
+                QString hex = v.toString().trimmed();
+                if (hex.isEmpty()) continue;
+                QString name = decodeZoneTopic(hex);
+                // Only add if not already present in the live file
+                if (!channelsObj.contains(name))
+                    channelsObj[name] = QJsonArray();
+            }
+        }
+    }
+
     // Build array: own channel first, rest sorted by name
     QStringList names = channelsObj.keys();
     names.sort(Qt::CaseInsensitive);
@@ -530,7 +549,7 @@ QString NodePlugin::getZoneMessages() const
         QJsonObject ch;
         bool isOwn = (!ownChannel.isEmpty() && name == ownChannel);
         ch[QStringLiteral("channel")]  = isOwn ? name + QStringLiteral(" (you)") : name;
-        ch[QStringLiteral("topic")]    = name;  // use name as topic key for filtering
+        ch[QStringLiteral("topic")]    = name;
         ch[QStringLiteral("messages")] = channelsObj[name].toArray();
         channels.append(ch);
     }
