@@ -1,0 +1,17 @@
+{
+  "author": "Logos Node",
+  "category": "blockchain",
+  "dependencies": [],
+  "description": "Logos blockchain node manager",
+  "icon": "",
+  "main": {
+    "linux-amd64":       "node_plugin.so",
+    "linux-amd64-dev":   "node_plugin.so",
+    "linux-x86_64-dev":  "node_plugin.so",
+    "darwin-arm64":      "node_plugin.dylib"
+  },
+  "manifestVersion": "0.2.0",
+  "name": "logos_node",
+  "type": "core",
+  "version": "0.1.0"
+}

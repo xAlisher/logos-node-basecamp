@@ -1,0 +1,10 @@
+{
+  "author": "Logos Node",
+  "category": "blockchain",
+  "dependencies": [],
+  "description": "Logos blockchain node manager",
+  "main": "node_plugin",
+  "name": "logos_node",
+  "type": "core",
+  "version": "0.1.0"
+}

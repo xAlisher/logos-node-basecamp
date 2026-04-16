@@ -1,0 +1,13 @@
+{
+  "name": "node_ui",
+  "version": "0.1.0",
+  "description": "Logos blockchain node manager — UI",
+  "author": "Logos Node",
+  "type": "ui_qml",
+  "pluginType": "qml",
+  "view": "Main.qml",
+  "dependencies": ["logos_node"],
+  "category": "blockchain",
+  "capabilities": [],
+  "icon": "icons/Node_sidebar.png"
+}
