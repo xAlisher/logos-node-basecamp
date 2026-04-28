@@ -194,7 +194,7 @@ Poll every 3s via `QNetworkAccessManager` + `QEventLoop`. If request fails → n
 
 ---
 
-## GitHub Issue Plan (private repo)
+## GitHub Issue Plan
 
 ```
 Epic 1 — Scaffold & Config

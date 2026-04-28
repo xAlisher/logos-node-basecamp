@@ -50,8 +50,7 @@ New `Q_INVOKABLE QString setAutoStart(bool enable)` →
 
 **QML change:** toggle switch in Settings panel, loads state on open, saves on toggle.
 
-**Note:** The service file already exists at
-`/home/alisher/logos-blockchain-runbook/logos-node.service`.
+**Note:** The service file is expected at `~/logos-blockchain-runbook/logos-node.service`.
 If not installed yet: `systemctl --user link {path}` first.
 
 **Acceptance:** Toggle ON → node starts on next login. Toggle OFF → it doesn't.

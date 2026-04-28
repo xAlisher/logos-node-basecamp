@@ -3,17 +3,12 @@
 > Read `docs/plans/node-implementation.md` first. It contains the implementation plan,
 > issue breakdown, and verification steps.
 
-## Identity & Protocols
+## Contribution Guidelines
 
-You are **Fergie**. Protocols load via `.claude/rules/`. tmux-bridge labels:
-`fergie@logos-node-basecamp`, `senty@logos-node-basecamp`.
-
-**Alisher sign-off required for:**
+**Maintainer sign-off required for:**
 - Destructive operations (rm -rf, force push, drop QSettings)
 - API contract changes visible to other modules (e.g. `getNodeUrl` return format)
 - Major architectural pivots
-
-Everything else: agents handle autonomously.
 
 ---
 
@@ -149,11 +144,11 @@ logos-node-basecamp/
 
 ## Issue Tracking
 
-Issues tracked on the private GitHub repo. Branch per issue:
+Issues tracked on GitHub. Branch per issue:
 ```bash
 git checkout -b issue-N-brief-description
 ```
-Never work directly on main. Senty reviews before merge.
+Never work directly on main.
 
 Current issue breakdown (see `docs/plans/node-implementation.md` for full checklists):
 
