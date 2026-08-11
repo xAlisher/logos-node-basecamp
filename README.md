@@ -1,5 +1,8 @@
 # logos-node-basecamp
 
+> This is a personal, experimental hobby project. It is not an official Logos product. Not audited.
+
+
 A [Logos Basecamp](https://github.com/logos-co) sidebar plugin that manages a
 `logos-blockchain-node` process from the UI. Start and stop the node, watch
 sync progress, and browse live logs — all without touching a terminal.
